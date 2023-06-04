@@ -63,23 +63,39 @@ fi
 
 remoteHome=$(ssh $zId@$host 'echo $HOME')
 
+giveCommand="$@"
+
 course="$1"
 courseID=$(echo "$course" | sed 's/cs//')
 
 task="$2"
-filenames="$3"
-giveCommand="$0"
+shift
+shift
+filenames="$@"
 
-if [ ! -f "$filename" ]; then
-    echo "$filename not found"
+oldIFS=$IFS
+IFS=' '
 
-    exit 1
-fi
+filenameArray=$filenames
+
+IFS=$oldIFS
+
+for value in $filenameArray; do
+    if [ ! -f "$value" ]; then
+        echo "$value not found"
+
+        exit 1
+    fi
+done
 
 upload=$(cat <<EOF
-put "$filename" "/import/reed/2/$zId/Documents/$course/"
+cd /import/reed/2/$zId/Documents/$course/
 EOF
 )
+
+for value in $filenameArray; do
+    upload=$upload"\nput $value"
+done
 
 autotest=$(cat <<EOF
 cd $remoteHome/Documents/$course
@@ -97,6 +113,8 @@ sftp -b "$tmpfile" "$zId@$host" > /dev/null 2>&1
 if [ $? = 1 ]; then
     ssh "$zId@$host" "mkdir $remoteHome/Documents/$course"
     sftp -b "$tmpfile" "$zId@$host" > /dev/null 2>&1
+else
+    echo -n "${GREEN}File transfer successful${NC}\n\n"
 fi
 
 echo "----------------------------------------"
@@ -122,7 +140,9 @@ echo -n "\n----------------------------------------\n"
 echo "             Beginning give"
 echo -n "----------------------------------------\n\n"
 
-ssh -t "$zId@$host" "cd $remoteHome/Documents/$course; echo -n "yes\nyes" | give $@"
+echo $giveCommand
+
+ssh -t "$zId@$host" "cd $remoteHome/Documents/$course; echo -n "yes\nyes" | give $giveCommand"
 
 if [ ! $? = 0 ]; then
     echo "${RED}An error occurred${NC}"
