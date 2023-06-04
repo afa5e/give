@@ -7,12 +7,24 @@ BGREEN='\033[1;92m'
 NC='\033[0m'
 
 # Print usage if no arguments
-if [ $# = 0 ]; then
-    echo "Usage:"
-    echo -n "\tgive zId z######\n\t\t Set zId to z######\n\n"
-    echo -n "\tgive cs#### lab##_TASKNAME FILE.EXT [PTIONALFILES.EXT...\n\t\t Run autotests and submit TASKNAME submit code\n"
+if [ $# = 0 ] || [ "$1" = "help" ]; then
+    echo "Description"
+    echo "\tGive is a shell script that allows give commands provided by"
+    echo "\tCSE run on other linux machines."
+    echo -n "\n\tGive will copy selected files to CSE servers with SFTP to\n"
+    echo "\t~/Documents/COURSECODE/, then will either run autotests if needed,"
+    echo -n "\tor the give command to submit.\n\n"
 
-    exit 1
+    echo -n "\tGive requires a SSH key to be set to connect to CSE servers\n\n\n"
+
+    echo "Usage:"
+    echo "\tgive zId z######"
+    echo -n "\t\t Set zId to z######\n\n"
+
+    echo "\tgive cs#### TASKNAME [FILE.EXT]..."
+    echo "\t\t  SFTPs files, runs autotests and give on CSE servers"
+
+    exit 0
 fi
 
 # Check if user is trying to save zId
@@ -54,7 +66,7 @@ host="login$(expr substr "$zId" ${#zId} 1).cse.unsw.edu.au"
 # Check if credentials are valid
 ssh -o BatchMode=yes -o ConnectTimeout=5 "$zId@$host" "echo 2>&1" >/dev/null
 if [ $? -eq 0 ]; then
-    echo -n "${GREEN}SSH connection successful\n\n${NC}"
+    echo "${GREEN}SSH connection successful${NC}"
 else
     echo "${RED}SSH connection requires public key crypto.${NC}"
 
@@ -113,34 +125,42 @@ sftp -b "$tmpfile" "$zId@$host" > /dev/null 2>&1
 if [ $? = 1 ]; then
     ssh "$zId@$host" "mkdir $remoteHome/Documents/$course"
     sftp -b "$tmpfile" "$zId@$host" > /dev/null 2>&1
+
+    if [ $? = 0 ]; then
+        echo "${GREEN}File transfer successful${NC}"
+    else
+        echo "${RED}An error occurred${NC}"
+
+        exit 1
+    fi
 else
-    echo -n "${GREEN}File transfer successful${NC}\n\n"
+    echo "${GREEN}File transfer successful${NC}"
 fi
 
-echo "----------------------------------------"
-echo "           Beginning autotest           "
-echo -n "----------------------------------------\n\n"
+if [ $courseID = "1521" ] || [ $courseID = "1511" ]; then
+    echo "----------------------------------------"
+    echo "           Beginning autotest           "
+    echo -n "----------------------------------------\n\n"
 
-ssh -t "$zId@$host" "$autotest"
+    ssh -t "$zId@$host" "$autotest"
 
-if [ ! $? = 0 ]; then
-    echo -n "${BRED}\nTests failed. Continue to submit? (Y/n): ${NC}"
+    if [ ! $? = 0 ]; then
+        echo -n "${BRED}\nTests failed. Continue to submit? (Y/n): ${NC}"
 
-    read submit
+        read submit
 
-    if [ ! $submit = 'y' ] && [ ! $submit = 'Y' ]; then
-        echo -n "${RED}\n----------------------------------------\n"
-        echo "           ${BRED}Submission aborted${NC}"
-        echo -n "${RED}----------------------------------------\n${NC}"
-        exit 0
+        if [ ! $submit = 'y' ] && [ ! $submit = 'Y' ]; then
+            echo -n "${RED}\n----------------------------------------\n"
+            echo "           ${BRED}Submission aborted${NC}"
+            echo -n "${RED}----------------------------------------\n${NC}"
+            exit 0
+        fi
     fi
 fi
 
 echo -n "\n----------------------------------------\n"
 echo "             Beginning give"
 echo -n "----------------------------------------\n\n"
-
-echo $giveCommand
 
 ssh -t "$zId@$host" "cd $remoteHome/Documents/$course; echo -n "yes\nyes" | give $giveCommand"
 
