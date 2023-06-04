@@ -1,0 +1,135 @@
+#!/bin/sh
+
+RED='\033[0;31m'
+BRED='\033[1;91m'
+GREEN='\033[0;92m'
+BGREEN='\033[1;92m'
+NC='\033[0m'
+
+# Print usage if no arguments
+if [ $# = 0 ]; then
+    echo "Usage:"
+    echo -n "\tgive zId z######\n\t\t Set zId to z######\n\n"
+    echo -n "\tgive cs#### lab##_TASKNAME FILE.EXT [PTIONALFILES.EXT...\n\t\t Run autotests and submit TASKNAME submit code\n"
+
+    exit 1
+fi
+
+# Check if user is trying to save zId
+if [ "$1" = 'zId' ]; then
+    if [ $# = 2 ] && echo "$2" | grep -Eq '^z[0-9]{7}$'; then
+        echo $2 >| "$HOME/give/zId.txt"
+        echo -e "${GREEN}$2 saved${NC}"
+
+        exit 0
+    else
+        if [ "${2%"${2#?}"}" != 'z' ]; then
+            echo "${RED}zID must start with 'z'${NC}"
+        elif ! echo "$2" | grep -Eq '^z[0-9]{7}$'; then
+            echo "${RED}zId must contain 7 digits${NC}"
+        else
+            echo "${RED}Invalid zId${NC}"
+        fi
+
+        exit 1
+    fi
+fi
+
+if [ $# -lt 3 ]; then
+    echo "${RED}Insufficient arguments provided${NC}"
+
+    exit 1
+fi
+
+# Check if zId.txt contains a valid zId
+if [ ! -s "$HOME/give/zId.txt" ]; then
+    echo "Set your zId with 'give zId z000000'"
+
+    exit 1
+fi
+
+zId=`cat $HOME/give/zId.txt`
+host="login$(expr substr "$zId" ${#zId} 1).cse.unsw.edu.au"
+
+# Check if credentials are valid
+ssh -o BatchMode=yes -o ConnectTimeout=5 "$zId@$host" "echo 2>&1" >/dev/null
+if [ $? -eq 0 ]; then
+    echo -n "${GREEN}SSH connection successful\n\n${NC}"
+else
+    echo "${RED}SSH connection requires public key crypto.${NC}"
+
+    exit 1
+fi
+
+remoteHome=$(ssh $zId@$host 'echo $HOME')
+
+course="$1"
+courseID=$(echo "$course" | sed 's/cs//')
+
+task="$2"
+filenames="$3"
+giveCommand="$0"
+
+if [ ! -f "$filename" ]; then
+    echo "$filename not found"
+
+    exit 1
+fi
+
+upload=$(cat <<EOF
+put "$filename" "/import/reed/2/$zId/Documents/$course/"
+EOF
+)
+
+autotest=$(cat <<EOF
+cd $remoteHome/Documents/$course
+
+$courseID autotest $task
+EOF
+)
+
+# SFTP code to CSE
+tmpfile=$(mktemp)
+echo "$upload" > "$tmpfile"
+sftp -b "$tmpfile" "$zId@$host" > /dev/null 2>&1
+
+# Create folder if missing
+if [ $? = 1 ]; then
+    ssh "$zId@$host" "mkdir $remoteHome/Documents/$course"
+    sftp -b "$tmpfile" "$zId@$host" > /dev/null 2>&1
+fi
+
+echo "----------------------------------------"
+echo "           Beginning autotest           "
+echo -n "----------------------------------------\n\n"
+
+ssh -t "$zId@$host" "$autotest"
+
+if [ ! $? = 0 ]; then
+    echo -n "${BRED}\nTests failed. Continue to submit? (Y/n): ${NC}"
+
+    read submit
+
+    if [ ! $submit = 'y' ] && [ ! $submit = 'Y' ]; then
+        echo -n "${RED}\n----------------------------------------\n"
+        echo "           ${BRED}Submission aborted${NC}"
+        echo -n "${RED}----------------------------------------\n${NC}"
+        exit 0
+    fi
+fi
+
+echo -n "\n----------------------------------------\n"
+echo "             Beginning give"
+echo -n "----------------------------------------\n\n"
+
+ssh -t "$zId@$host" "cd $remoteHome/Documents/$course; echo -n "yes\nyes" | give $@"
+
+if [ ! $? = 0 ]; then
+    echo "${RED}An error occurred${NC}"
+
+    exit 1
+else
+    echo -n "${GREEN}\n----------------------------------------\n"
+    echo "          ${BGREEN}Submission successful${GREEN}"
+    echo -n "----------------------------------------\n${NC}"
+fi
