@@ -1,19 +1,30 @@
 #!/bin/sh
 url="https://raw.githubusercontent.com/afa5e/give/main/give"
-output_file="give"
 
-if [ ! -d "$HOME/give/" ]; then
+dir="$HOME/give/"
+
+if [ ! -d "$dir" ]; then
     cd $HOME
     mkdir give
 fi
 
-cd $HOME/give/
+cd $dir
 
-wget "$url" -O "$output_file"
+wget "$url" -O give
 
 chmod +x give
 
 case "$SHELL" in
-  */bash) echo 'export PATH="$PATH:'"$HOME/give/"'"' >> ~/.bashrc;;
-  */zsh) echo 'export PATH="$PATH:'"$HOME/give/"'"' >> ~/.zshrc;;
+    */bash)
+        case ":$PATH:" in
+            *:$HOME/give:*) ;;
+            *)  echo 'export PATH="$PATH:'"$dir"'"' >> ~/.bashrc
+        esac
+        ;;
+    */zsh)
+        case ":$PATH:" in
+            *:$HOME/give:*) ;;
+            *)  echo 'export PATH="$PATH:'"$dir"'"' >> ~/.zshrc;;
+        esac
+        ;;
 esac
